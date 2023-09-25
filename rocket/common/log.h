@@ -5,6 +5,9 @@
 #include <queue>
 #include <memory>
 
+#include "rocket/common/config.h"
+#include "rocket/common/mutex.h"
+
 namespace rocket{
 
 
@@ -23,12 +26,33 @@ std::string formatString(const char* str, Args&&... args) {
 }
     
 #define DEBUGLOG(str, ...)\
-    std::string msg = (new rocket::LogEvent(rocket::LogLevel::Debug))->toString() + rocket::formatString(str, ##__VA_ARGS__); \
-    rocket::Logger::GetGlobalLogger()->pushLog(msg);  \
-    rocket::Logger::GetGlobalLogger()->log();  \
+    if(rocket::Logger::GetGlobalLogger()->getLogLevel() <= rocket::Debug) \
+    { \
+        rocket::Logger::GetGlobalLogger()->pushLog((new rocket::LogEvent(rocket::LogLevel::Debug))->toString() + "[" + std::string(__FILE__) + ":" + std::to_string(__LINE__) + "]\t" + rocket::formatString(str, ##__VA_ARGS__) + "\n");    \
+        rocket::Logger::GetGlobalLogger()->log();   \
+    } \
 
+#define INFOLOG(str, ...)\
+    if(rocket::Logger::GetGlobalLogger()->getLogLevel() <= rocket::Info) \
+    { \
+        rocket::Logger::GetGlobalLogger()->pushLog((new rocket::LogEvent(rocket::LogLevel::Info))->toString() + "[" + std::string(__FILE__) + ":" + std::to_string(__LINE__) + "]\t" + rocket::formatString(str, ##__VA_ARGS__) + "\n");    \
+        rocket::Logger::GetGlobalLogger()->log();   \
+    } \
+
+#define ERRORLOG(str, ...)\
+    if(rocket::Logger::GetGlobalLogger()->getLogLevel() <= rocket::Error) \
+    { \
+        rocket::Logger::GetGlobalLogger()->pushLog((new rocket::LogEvent(rocket::LogLevel::Error))->toString() + "[" + std::string(__FILE__) + ":" + std::to_string(__LINE__) + "]\t" + rocket::formatString(str, ##__VA_ARGS__) + "\n");    \
+        rocket::Logger::GetGlobalLogger()->log();   \
+    } \
+
+
+
+
+    
 
 enum LogLevel{
+    Unknown = 0,
     Debug = 1,
     Info = 2,
     Error = 3
@@ -39,21 +63,34 @@ class Logger {
     public:
     typedef std::shared_ptr<Logger> s_ptr;
 
+    Logger(LogLevel level) : m_set_level(level){}
+
     void pushLog(const std::string& msg);
 
     void log();
 
+    LogLevel getLogLevel() const{
+        return m_set_level;
+    }
+
     static Logger* GetGlobalLogger();
+
+    static void InitGlobalLogger();
 
     private:
 
     LogLevel m_set_level;
     std::queue<std::string> m_buffer;
 
+    Mutex m_mutex;
+
 };
 
 
 std::string LogLevelToString(LogLevel level);
+
+LogLevel StringToLogLevel(const std::string& log_level);
+
 
 class LogEvent{
     public:
