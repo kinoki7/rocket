@@ -1,0 +1,183 @@
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <string.h>
+#include "rocket/net/eventloop.h"
+#include "rocket/common/log.h"
+#include "rocket/common/util.h"
+
+#define ADD_TO_EPOLL() \
+    auto it = m_listen_fds.find(event->getFd()); \
+    int op = EPOLL_CTL_ADD; \
+    if(it != m_listen_fds.end()) { \
+        op = EPOLL_CTL_MOD; \
+    } \
+    epoll_event tmp = event->getEpollEvent(); \
+    int rt = epoll_ctl(m_epoll_fd, op, event->getFd(), &tmp); \
+    if(rt == -1) { \
+        ERRORLOG("failed epoll_clt when add fd %d, errno=%s, error info=%s", event->getFd(), errno, strerror(errno)); \
+    } \
+    DEBUGLOG("add event success, fd[%d]", event->getFd()); \
+
+
+#define DELETE_TO_EPOLL() \
+    auto it = m_listen_fds.find(event->getFd()); \
+    if(it == m_listen_fds.end()) { \
+        return ; \
+    } \
+    int op = EPOLL_CTL_ADD; \
+    epoll_event tmp = event->getEpollEvent(); \
+    int rt = epoll_ctl(m_epoll_fd, op, event->getFd(), &tmp); \
+    if(rt == -1) { \
+        ERRORLOG("failed epoll_clt when add fd %d, errno=%s, error info=%s", event->getFd(), errno, strerror(errno)); \
+    } \
+    DEBUGLOG("delete event success, fd[%d]", event->getFd()); \
+
+
+namespace rocket {
+
+static thread_local EventLoop* t_current_eventloop = NULL;
+static int g_epoll_max_timeout = 10000;
+static int g_eppol_max_events = 10;
+
+
+EventLoop::EventLoop() {
+    if(t_current_eventloop != NULL) {
+        ERRORLOG("fail to create event loop, this thread has create eventloop");
+        exit(0);
+    }
+    m_thread_id = getThreadId();
+
+    m_epoll_fd = epoll_create(10);
+
+    if(m_epoll_fd == -1) {
+        ERRORLOG("fail to create event loop, epoll_create error, error info[%d]", errno);
+        exit(0);
+    }
+
+    initWakeUpFdEvent();
+
+    INFOLOG("succ create eventloop in thread %d", m_thread_id);
+    t_current_eventloop = this;
+}
+
+EventLoop::~EventLoop() {
+    close(m_epoll_fd);
+    if(m_wake_up_event) {
+        delete m_wake_up_event;
+        m_wake_up_event = NULL;
+    }
+}
+
+void EventLoop::initWakeUpFdEvent() {
+    m_wakeup_fd = eventfd(0, EFD_NONBLOCK);
+    if(m_wakeup_fd < 0) {
+        ERRORLOG("fail to create event fd, eventfd error, error info[%d]", errno);
+        exit(0);
+    }
+
+    m_wake_up_event = new WakeUpFdEvent(m_wakeup_fd);
+
+    m_wake_up_event->listen(FdEvent::IN_EVENT, [this]() {
+        char buf[8];
+        while(read(m_wakeup_fd, buf, 8) != -1 && errno != EAGAIN) {
+
+        }
+        DEBUGLOG("read full bytes from wakeup fd[%d]", m_wakeup_fd);
+    });
+
+    addEpollEvent(m_wake_up_event);
+}
+
+void EventLoop::loop() {
+    while(!m_stop_flag) {
+        ScopeMutex<Mutex> lock(m_mutex);
+        std::queue<std::function<void()>> tmp_task = m_pending_tasks;
+        m_pending_tasks.swap(tmp_task);
+        lock.unlock();
+
+        while(!tmp_task.empty()) {
+            tmp_task.front()();
+            tmp_task.pop();
+        }
+
+        int timeout = g_epoll_max_timeout;
+        epoll_event result_events[g_eppol_max_events];
+        int rt = epoll_wait(m_epoll_fd, result_events, g_eppol_max_events, g_epoll_max_timeout);
+
+        if(rt < 0) {
+            ERRORLOG("epoll_wait error, error = %d", errno);
+        }else {
+            for(int i = 0; i < rt; i++) {
+                epoll_event trigger_event = result_events[i];
+                FdEvent* fd_event = static_cast<FdEvent*>(trigger_event.data.ptr);
+                if(fd_event == NULL) {
+                    continue;
+                }
+
+                if(trigger_event.events | EPOLLIN) {
+                    addTask(fd_event->handler(FdEvent::IN_EVENT));
+                }
+
+                if(trigger_event.events | EPOLLOUT) {
+                    addTask(fd_event->handler(FdEvent::OUT_EVENT));
+                }
+            }
+        }
+    }
+
+}
+
+void EventLoop::wakeup() {
+
+}
+
+void EventLoop::stop() {
+
+}
+
+void EventLoop::dealWakeup() {
+
+}
+
+void EventLoop::addEpollEvent(FdEvent* event) {
+    if(isInLoopThread()) {
+        ADD_TO_EPOLL();
+    }else {
+        auto cb = [this, event]() {
+            ADD_TO_EPOLL();
+        };
+        addTask(cb, true);
+    }
+
+}
+
+void EventLoop::deleteEpollEvent(FdEvent* event) {
+    if(isInLoopThread()) {
+        DELETE_TO_EPOLL();
+    }else {
+        auto cb = [this, event]() {
+            DELETE_TO_EPOLL();
+        };
+        addTask(cb, true);
+    }
+}
+
+void EventLoop::addTask(std::function<void()> cb, bool is_wake_up) {
+    ScopeMutex<Mutex> lock(m_mutex);
+    m_pending_tasks.push(cb);
+    lock.unlock();
+
+    if(is_wake_up) {
+        wakeup();
+    }
+
+}
+
+
+bool EventLoop::isInLoopThread() {
+    return getThreadId() == m_thread_id;
+}
+
+
+}
