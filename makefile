@@ -41,15 +41,18 @@ COMM_OBJ := $(patsubst $(PATH_COMM)/%.cc, $(PATH_OBJ)/%.o, $(wildcard $(PATH_COM
 NET_OBJ := $(patsubst $(PATH_NET)/%.cc, $(PATH_OBJ)/%.o, $(wildcard $(PATH_NET)/*.cc))
 
 
-ALL_TESTS : $(PATH_BIN)/test_log 
+ALL_TESTS : $(PATH_BIN)/test_log $(PATH_BIN)/test_eventloop
 # ALL_TESTS : $(PATH_BIN)/test_log
 
-TEST_CASE_OUT := $(PATH_BIN)/test_log
+TEST_CASE_OUT := $(PATH_BIN)/test_log $(PATH_BIN)/test_eventloop
 
 LIB_OUT := $(PATH_LIB)/librocket.a
 
 $(PATH_BIN)/test_log: $(LIB_OUT)
 	$(CXX) $(CXXFLAGS) $(PATH_TESTCASES)/test_log.cc -o $@ $(LIB_OUT) $(LIBS) -ldl -pthread
+
+$(PATH_BIN)/test_eventloop: $(LIB_OUT)
+	$(CXX) $(CXXFLAGS) $(PATH_TESTCASES)/test_eventloop.cc -o $@ $(LIB_OUT) $(LIBS) -ldl -pthread
 
 
 

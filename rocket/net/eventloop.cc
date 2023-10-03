@@ -63,9 +63,9 @@ EventLoop::EventLoop() {
 
 EventLoop::~EventLoop() {
     close(m_epoll_fd);
-    if(m_wake_up_event) {
-        delete m_wake_up_event;
-        m_wake_up_event = NULL;
+    if(m_wakeup_fd_event) {
+        delete m_wakeup_fd_event;
+        m_wakeup_fd_event = NULL;
     }
 }
 
@@ -76,9 +76,9 @@ void EventLoop::initWakeUpFdEvent() {
         exit(0);
     }
 
-    m_wake_up_event = new WakeUpFdEvent(m_wakeup_fd);
+    m_wakeup_fd_event = new WakeUpFdEvent(m_wakeup_fd);
 
-    m_wake_up_event->listen(FdEvent::IN_EVENT, [this]() {
+    m_wakeup_fd_event->listen(FdEvent::IN_EVENT, [this]() {
         char buf[8];
         while(read(m_wakeup_fd, buf, 8) != -1 && errno != EAGAIN) {
 
@@ -86,24 +86,29 @@ void EventLoop::initWakeUpFdEvent() {
         DEBUGLOG("read full bytes from wakeup fd[%d]", m_wakeup_fd);
     });
 
-    addEpollEvent(m_wake_up_event);
+    addEpollEvent(m_wakeup_fd_event);
 }
 
 void EventLoop::loop() {
     while(!m_stop_flag) {
         ScopeMutex<Mutex> lock(m_mutex);
-        std::queue<std::function<void()>> tmp_task = m_pending_tasks;
+        std::queue<std::function<void()>> tmp_task;
         m_pending_tasks.swap(tmp_task);
         lock.unlock();
 
         while(!tmp_task.empty()) {
-            tmp_task.front()();
+            std::function<void()> cb = tmp_task.front();
             tmp_task.pop();
+            if(cb) {
+                cb();
+            }
         }
 
         int timeout = g_epoll_max_timeout;
         epoll_event result_events[g_eppol_max_events];
+        // DEBUGLOG("now begin to epoll_wait");
         int rt = epoll_wait(m_epoll_fd, result_events, g_eppol_max_events, g_epoll_max_timeout);
+        DEBUGLOG("now end epoll_wait, rt = %d",rt);
 
         if(rt < 0) {
             ERRORLOG("epoll_wait error, error = %d", errno);
@@ -115,11 +120,13 @@ void EventLoop::loop() {
                     continue;
                 }
 
-                if(trigger_event.events | EPOLLIN) {
+                if(trigger_event.events & EPOLLIN) {
+                    DEBUGLOG("fd %d trigger EPOLLIN event", fd_event->getFd());
                     addTask(fd_event->handler(FdEvent::IN_EVENT));
                 }
 
-                if(trigger_event.events | EPOLLOUT) {
+                if(trigger_event.events & EPOLLOUT) {
+                    DEBUGLOG("fd %d trigger EPOLLOUT event", fd_event->getFd());
                     addTask(fd_event->handler(FdEvent::OUT_EVENT));
                 }
             }
@@ -129,7 +136,7 @@ void EventLoop::loop() {
 }
 
 void EventLoop::wakeup() {
-
+    m_wakeup_fd_event->wakeup();
 }
 
 void EventLoop::stop() {

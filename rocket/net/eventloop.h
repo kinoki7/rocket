@@ -45,7 +45,7 @@ private:
 
     int m_wakeup_fd {0};
 
-    WakeUpFdEvent* m_wake_up_event {NULL};
+    WakeUpFdEvent* m_wakeup_fd_event {NULL};
 
     bool m_stop_flag {false};
 
