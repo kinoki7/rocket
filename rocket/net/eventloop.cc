@@ -56,6 +56,7 @@ EventLoop::EventLoop() {
     }
 
     initWakeUpFdEvent();
+    initTimer();
 
     INFOLOG("succ create eventloop in thread %d", m_thread_id);
     t_current_eventloop = this;
@@ -67,7 +68,22 @@ EventLoop::~EventLoop() {
         delete m_wakeup_fd_event;
         m_wakeup_fd_event = NULL;
     }
+    if(m_timer) {
+        delete m_timer;
+        m_timer = NULL;
+    }
 }
+
+void EventLoop::addTimerEvent(TimerEvent::s_ptr event) {
+    m_timer->addTimerEvent(event);
+}
+
+
+void EventLoop::initTimer(){
+    m_timer = new Timer();
+    addEpollEvent(m_timer);
+}
+
 
 void EventLoop::initWakeUpFdEvent() {
     m_wakeup_fd = eventfd(0, EFD_NONBLOCK);

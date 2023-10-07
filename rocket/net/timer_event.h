@@ -21,6 +21,20 @@ public:
         m_is_cancled = value;
     }
 
+    bool isCancle() {
+        return m_is_cancled;
+    }
+
+    bool isRepeated() {
+        return m_is_repeated;
+    }
+
+    std::function<void()> getCallBack() {
+        return m_task;
+    }
+
+    void resetArriveTime();
+
 private:
 
     int64_t m_arrive_time;

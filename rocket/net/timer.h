@@ -20,7 +20,7 @@ public:
 
     void deleteTimerEvent(TimerEvent::s_ptr event);
 
-    void onTime();
+    void onTimer();
 
     void resetArriveTime();
 

@@ -12,16 +12,11 @@ Timer::Timer() {
     m_fd = timerfd_create(CLOCK_MONOTONIC,TFD_NONBLOCK | TFD_CLOEXEC);
     DEBUGLOG("timer fd = %d", m_fd);
 
-    listen(FdEvent::IN_EVENT, std::bind(&Timer::onTime, this));
+    listen(FdEvent::IN_EVENT, std::bind(&Timer::onTimer, this));
 }
 
 Timer::~Timer() {
-    char buf[8];
-    while(1){
-        if((read(m_fd, buf, 8) == -1) && errno == EAGAIN) {
-            break;
-        }
-    }
+    
 }
 
 void Timer::resetArriveTime() {
@@ -29,7 +24,7 @@ void Timer::resetArriveTime() {
     auto tmp = m_pending_events;
     lock.unlock();
 
-    if(tmp.size()) {
+    if(tmp.size() == 0) {
         return ;
     }
 
@@ -44,16 +39,19 @@ void Timer::resetArriveTime() {
     }
 
     timespec ts;
+    memset(&ts, 0, sizeof(ts));
     ts.tv_sec = interval /1000;
     ts.tv_nsec = (interval%1000) * 1000000;
 
     itimerspec value;
+    memset(&value, 0, sizeof(value));
     value.it_value = ts;
 
     int rt = timerfd_settime(m_fd, 0, &value, NULL);
     if(rt != 0) {
         ERRORLOG("timefd_settimer error, errno=%d, error=%s", errno, strerror(errno));
     }
+    DEBUGLOG("timer reset to %lld", now + interval);
 }
 
 void Timer::addTimerEvent(TimerEvent::s_ptr event) {
@@ -97,7 +95,50 @@ void Timer::deleteTimerEvent(TimerEvent::s_ptr event) {
     DEBUGLOG("success delete TimerEvnt at arrive time %lld", event->getArriveTime());
 }
 
-void Timer::onTime() {
+void Timer::onTimer() {
+    char buf[8];
+    while(1){
+        if((read(m_fd, buf, 8) == -1) && errno == EAGAIN) {
+            break;
+        }
+    }
+
+    int64_t now = getNowMs();
+
+    std::vector<TimerEvent::s_ptr> tmps;
+    std::vector<std::pair<int64_t, std::function<void()>>> tasks;
+
+    ScopeMutex<Mutex> lock(m_mutex);
+    auto it = m_pending_events.begin();
+
+    for(it = m_pending_events.begin(); it != m_pending_events.end(); ++it) {
+        if((*it).first <= now ) {
+            if(!(*it).second->isCancle()) {
+                tmps.push_back((*it).second);
+                tasks.push_back(std::make_pair((*it).second->getArriveTime(), (*it).second->getCallBack()));
+            }
+        }else {
+            break;
+        }
+    }
+    m_pending_events.erase(m_pending_events.begin(), it);
+    lock.unlock();
+
+    for(auto i = tmps.begin(); i != tmps.end(); i++) {
+        if((*i)->isRepeated()) {
+            (*i)->resetArriveTime();
+            addTimerEvent(*i);
+        }
+    }
+
+    resetArriveTime();
+
+    for(auto i:tasks) {
+        if(i.second) {
+            i.second();
+        }
+    }
+
 
 }
 
