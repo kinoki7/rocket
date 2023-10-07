@@ -36,7 +36,7 @@ int main() {
     }
     rt = listen(listenfd, 128);
     if(rt != 0) {
-        ERRORLOG("listeb error");
+        ERRORLOG("listen error");
         exit(1);
     }
 

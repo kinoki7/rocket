@@ -107,7 +107,7 @@ void EventLoop::loop() {
         int timeout = g_epoll_max_timeout;
         epoll_event result_events[g_eppol_max_events];
         // DEBUGLOG("now begin to epoll_wait");
-        int rt = epoll_wait(m_epoll_fd, result_events, g_eppol_max_events, g_epoll_max_timeout);
+        int rt = epoll_wait(m_epoll_fd, result_events, g_eppol_max_events, timeout);
         DEBUGLOG("now end epoll_wait, rt = %d",rt);
 
         if(rt < 0) {
