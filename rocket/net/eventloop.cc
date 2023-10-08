@@ -25,7 +25,7 @@
     if(it == m_listen_fds.end()) { \
         return ; \
     } \
-    int op = EPOLL_CTL_ADD; \
+    int op = EPOLL_CTL_DEL; \
     epoll_event tmp = event->getEpollEvent(); \
     int rt = epoll_ctl(m_epoll_fd, op, event->getFd(), &tmp); \
     if(rt == -1) { \
