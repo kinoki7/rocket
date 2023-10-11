@@ -56,12 +56,16 @@ int TcpAcceptor::accept() {
             ERRORLOG("accept erro, errno=%d, error=%s", errno, strerror(errno));
         }
         IPNetAddr peer_addr(client_addr);
-        INFOLOG("A client have accepted succ, peer addr [%s]", peer_addr.toString());
+        INFOLOG("A client have accepted succ, peer addr [%s]", peer_addr.toString().c_str());
         return client_fd;
     }else {
         //..其他的ip地址类型处理
+        return -1;
     }
 }
 
+int TcpAcceptor::getListenFd() {
+    return m_listenfd;
+}
 
 }

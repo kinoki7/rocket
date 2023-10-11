@@ -9,7 +9,7 @@ IPNetAddr::IPNetAddr(const std::string& ip, uint16_t port) : m_ip(ip), m_port(po
     memset(&m_addr, 0, sizeof(m_addr));
 
     m_addr.sin_family = AF_INET;
-    m_addr.sin_family = inet_addr(m_ip.c_str());
+    m_addr.sin_addr.s_addr = inet_addr(m_ip.c_str());
     m_addr.sin_port = htons(m_port);
 }
 
