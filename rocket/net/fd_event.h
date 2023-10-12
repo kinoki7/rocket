@@ -33,6 +33,8 @@ public:
         return m_listen_events;
     }
 
+    void setNonBlock();
+
 protected:
     int m_fd {-1};
 

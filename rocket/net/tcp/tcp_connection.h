@@ -1,32 +1,42 @@
 #ifndef ROCKET_NET_TCP_TCP_CONNECTION_H
 #define ROCKET_NET_TCP_TCP_CONNECTION_H
 
+#include <memory>
+
 #include "rocket/net/tcp/net_addr.h"
 #include "rocket/net/tcp/tcp_buffer.h"
 #include "rocket/net/io_thread.h"
 
 namespace rocket {
 
+
+enum TcpState {
+    NotConnected = 1,
+    Connected = 2,
+    HalfClosing = 3,
+    Closed = 4,
+};
+
 class TcpConnection {
+
 
 public:
 
-    enum TcpState {
-        NotConnected = 1,
-        Connected = 2,
-        HalfClosing = 3,
-        Closed = 4,
-    };
+    typedef std::shared_ptr<TcpConnection> s_ptr;
 
     TcpConnection(IOThread* IO_thread, int fd, int buffer_size, NetAddr::s_ptr peer_addr);
 
     ~TcpConnection();
 
-    void read();
+    void onRead();
 
     void excute();
 
-    void write();
+    void onWrite();
+
+    void setState(const TcpState state);
+
+    TcpState getState();
 
 
 private:
@@ -40,6 +50,8 @@ private:
     IOThread* m_io_thread {NULL}; //代表持有该连接的IO线程
 
     FdEvent* m_fd_event {NULL};
+
+    int m_fd {-1};
 
     TcpState m_state;
 
