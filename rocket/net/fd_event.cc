@@ -49,5 +49,15 @@ void FdEvent::setNonBlock() {
     fcntl(m_fd, F_SETFL, flag | O_NONBLOCK);
 }
 
+void FdEvent::cancle(TriggerEvent event_type) {
+    if(event_type == TriggerEvent::IN_EVENT) {
+        m_listen_events.events &= (~EPOLLIN);
+    }else {
+        m_listen_events.events &= (~EPOLLOUT);
+    }
+
+    m_listen_events.data.ptr = this;
+}
+
 
 }

@@ -17,6 +17,7 @@
     if(rt == -1) { \
         ERRORLOG("failed epoll_clt when add fd %d, errno=%s, error info=%s", event->getFd(), errno, strerror(errno)); \
     } \
+    m_listen_fds.insert(event->getFd()); \
     DEBUGLOG("add event success, fd[%d]", event->getFd()); \
 
 
@@ -31,6 +32,7 @@
     if(rt == -1) { \
         ERRORLOG("failed epoll_clt when add fd %d, errno=%s, error info=%s", event->getFd(), errno, strerror(errno)); \
     } \
+    m_listen_fds.erase(event->getFd()); \
     DEBUGLOG("delete event success, fd[%d]", event->getFd()); \
 
 

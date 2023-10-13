@@ -38,8 +38,15 @@ public:
 
     TcpState getState();
 
+    void clear();
+
+    //服务器主动关闭连接
+    void shutdown();
+
 
 private:
+
+    IOThread* m_io_thread {NULL}; //代表持有该连接的IO线程
 
     NetAddr::s_ptr m_local_addr;
     NetAddr::s_ptr m_peer_addr;
@@ -47,13 +54,11 @@ private:
     TcpBuffer::s_ptr m_in_buffer; // 接收缓冲区
     TcpBuffer::s_ptr m_out_buffer; // 发送缓冲区
 
-    IOThread* m_io_thread {NULL}; //代表持有该连接的IO线程
-
     FdEvent* m_fd_event {NULL};
+    
+    TcpState m_state;
 
     int m_fd {-1};
-
-    TcpState m_state;
 
 };
 

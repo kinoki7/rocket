@@ -15,10 +15,12 @@ TcpConnection::TcpConnection(IOThread* IO_thread, int fd, int buffer_size, NetAd
 
     m_fd_event->setNonBlock();
     m_fd_event->listen(FdEvent::IN_EVENT, std::bind(&TcpConnection::onRead, this));
+
+    IO_thread->getEventLoop()->addEpollEvent(m_fd_event);
 }
 
 TcpConnection::~TcpConnection() {
-
+    DEBUGLOG("~TcpConnection");
 }
 
 void TcpConnection::onRead() {
@@ -48,14 +50,18 @@ void TcpConnection::onRead() {
                 is_read_all = true;
                 break;
             }
-        }else {
+        }else if(rt == 0) {
             is_close = true; 
+        }else if(rt == -1 && errno == EAGAIN) {
+            is_read_all = true;
+            break;
         }
     }
 
     if(is_close) {
         // TODO: 处理关闭连接
-        DEBUGLOG("peer closed, peer addr [%d], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
+        clear();
+        INFOLOG("peer closed, peer addr [%d], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
     }
 
     if(!is_read_all) {
@@ -74,7 +80,7 @@ void TcpConnection::excute() {
     m_in_buffer->readFromBuffer(tmp, size);
 
     std::string msg;
-    for(int i = 0; i < tmp.size(); i++) {
+    for(size_t i = 0; i < tmp.size(); i++) {
         msg += tmp[i];
     }
 
@@ -83,6 +89,8 @@ void TcpConnection::excute() {
     m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
 
     m_fd_event->listen(FdEvent::OUT_EVENT, std::bind(&TcpConnection::onWrite, this));
+
+    m_io_thread->getEventLoop()->addEpollEvent(m_fd_event);
 
 }
 
@@ -93,10 +101,11 @@ void TcpConnection::onWrite() {
         return ;
     }
 
-    
+    bool is_write_all = false;
     while(true) {
         if(m_out_buffer->readAble() == 0) {
             DEBUGLOG("no data need to seed to client[%s]", m_peer_addr->toString().c_str());
+            is_write_all = true;
             break;
         }
 
@@ -107,12 +116,17 @@ void TcpConnection::onWrite() {
 
         if(rt >= write_size) {
             DEBUGLOG("no data need to seed to client[%s]", m_peer_addr->toString().c_str());
+            is_write_all = true;
             break;
         }if(rt == -1 && errno == EAGAIN) {
             // 发送缓冲区已满，不能再发送了 等下次fd可写的时候发送数据即可
             ERRORLOG("write data error, errno == EAGAIN and rt == -1");
             break;
         }
+    }
+    if(is_write_all) {
+        m_fd_event->cancle(FdEvent::OUT_EVENT);
+        m_io_thread->getEventLoop()->addEpollEvent(m_fd_event);
     }
 
 }
@@ -122,8 +136,32 @@ void TcpConnection::setState(const TcpState state) {
 }
 
 TcpState TcpConnection::getState() {
+    return m_state;
+}
+
+void TcpConnection::clear() {
+    // 处理一些关闭连接后的清理动作
+    if(m_state == Closed) {
+        return;
+    }
+    m_io_thread->getEventLoop()->deleteEpollEvent(m_fd_event);
+
+    m_state = Closed;
 
 }
 
+void TcpConnection::shutdown() {
+    if(m_state == Closed || m_state == NotConnected) {
+        return;
+    }
+
+    //处于半关闭状态
+    m_state = HalfClosing;
+
+    //调用shutdown关闭读写，意味着服务器不再会对这个fd进行读写操作了
+    //发送FIN报文，触发了四次挥手的第一个阶段
+    //当fd发生可读事件，但是可读的数据为0时，即对端发送了FIN
+    ::shutdown(m_fd, SHUT_RDWR);
+}
 
 }
