@@ -52,6 +52,7 @@ void TcpConnection::onRead() {
             }
         }else if(rt == 0) {
             is_close = true; 
+            break;
         }else if(rt == -1 && errno == EAGAIN) {
             is_read_all = true;
             break;
@@ -62,6 +63,7 @@ void TcpConnection::onRead() {
         // TODO: 处理关闭连接
         clear();
         INFOLOG("peer closed, peer addr [%d], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
+        return;
     }
 
     if(!is_read_all) {
@@ -69,6 +71,7 @@ void TcpConnection::onRead() {
     }
 
     //TODO: 简单的echo，后面补充RPC协议的解析
+    excute();
 
 }
 
@@ -97,7 +100,7 @@ void TcpConnection::excute() {
 void TcpConnection::onWrite() {
     // 将当前out_buffer 里面的数据全部发送给client
     if(m_state != Connected) {
-        ERRORLOG("onWead error, client has already disconnected, addr[%s], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
+        ERRORLOG("onWrite error, client has already disconnected, addr[%s], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
         return ;
     }
 
@@ -144,6 +147,9 @@ void TcpConnection::clear() {
     if(m_state == Closed) {
         return;
     }
+    m_fd_event->cancle(FdEvent::IN_EVENT);
+    m_fd_event->cancle(FdEvent::OUT_EVENT);
+
     m_io_thread->getEventLoop()->deleteEpollEvent(m_fd_event);
 
     m_state = Closed;

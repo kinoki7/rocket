@@ -56,7 +56,6 @@ void FdEvent::cancle(TriggerEvent event_type) {
         m_listen_events.events &= (~EPOLLOUT);
     }
 
-    m_listen_events.data.ptr = this;
 }
 
 
