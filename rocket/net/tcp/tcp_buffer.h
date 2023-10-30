@@ -1,5 +1,5 @@
 #ifndef ROCKET_NET_TCP_TCP_BUFFER_H
-#define OCKET_NET_TCP_TCP_BUFFER_H
+#define ROCKET_NET_TCP_TCP_BUFFER_H
 
 #include <vector>
 #include <memory>

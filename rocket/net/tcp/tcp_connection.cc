@@ -3,6 +3,7 @@
 #include "rocket/net/tcp/tcp_connection.h"
 #include "rocket/net/fd_event_group.h"
 #include "rocket/common/log.h"
+#include "rocket/net/string_coder.h"
 
 namespace rocket {
 
@@ -14,13 +15,17 @@ TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, Net
     m_fd_event = FdEventGroup::GetFdEventGroup()->getFdEvent(fd);
 
     m_fd_event->setNonBlock();
-    m_fd_event->listen(FdEvent::IN_EVENT, std::bind(&TcpConnection::onRead, this));
+    listenRead();
 
-    m_event_loop->addEpollEvent(m_fd_event);
+    m_coder = new StringCoder();
 }
 
 TcpConnection::~TcpConnection() {
     DEBUGLOG("~TcpConnection");
+    if(m_coder) {
+        delete m_coder;
+        m_coder = NULL;
+    }
 }
 
 void TcpConnection::onRead() {
@@ -91,9 +96,7 @@ void TcpConnection::excute() {
 
     m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
 
-    m_fd_event->listen(FdEvent::OUT_EVENT, std::bind(&TcpConnection::onWrite, this));
-
-    m_event_loop->addEpollEvent(m_fd_event);
+    listenWrite();
 
 }
 
@@ -102,6 +105,18 @@ void TcpConnection::onWrite() {
     if(m_state != Connected) {
         ERRORLOG("onWrite error, client has already disconnected, addr[%s], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
         return ;
+    }
+
+    if(m_connection_type == TcpConnectionByClient) {
+        // 1. 将message encode得到字节流
+        // 将数据写入到buffer里面，然后全部发送
+
+        std::vector<AbstractProtocol*> messages;
+
+        for(size_t i = 0; i < m_write_dones.size(); ++i) {
+            messages.push_back(m_write_dones[i].first.get());
+        }
+        m_coder->encode(messages, m_out_buffer);
     }
 
     bool is_write_all = false;
@@ -130,6 +145,13 @@ void TcpConnection::onWrite() {
     if(is_write_all) {
         m_fd_event->cancle(FdEvent::OUT_EVENT);
         m_event_loop->addEpollEvent(m_fd_event);
+    }
+
+    if(m_connection_type == TcpConnectionByClient) {
+        for(size_t i = 0; i < m_write_dones.size(); ++i) {
+            m_write_dones[i].second(m_write_dones[i].first);
+        }
+        m_write_dones.clear();
     }
 
 }
@@ -172,6 +194,22 @@ void TcpConnection::shutdown() {
 
 void TcpConnection::setConnectionType(TcpConnectionType type) {
     m_connection_type = type;
+}
+
+void TcpConnection::listenWrite() {
+    m_fd_event->listen(FdEvent::OUT_EVENT, std::bind(&TcpConnection::onWrite, this));
+
+    m_event_loop->addEpollEvent(m_fd_event);
+}
+
+void TcpConnection::listenRead() {
+    m_fd_event->listen(FdEvent::IN_EVENT, std::bind(&TcpConnection::onRead, this));
+
+    m_event_loop->addEpollEvent(m_fd_event);
+}
+
+void TcpConnection::pushSendMessage(AbstractProtocol::s_ptr message, std::function<void(AbstractProtocol::s_ptr)> done) {
+    m_write_dones.push_back(std::make_pair(message, done));
 }
 
 

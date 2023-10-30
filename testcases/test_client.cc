@@ -13,6 +13,8 @@
 #include "rocket/common/config.h"
 #include "rocket/net/tcp/tcp_client.h"
 #include "rocket/net/tcp/net_addr.h"
+#include "rocket/net/string_coder.h"
+#include "rocket/net/abstract_protocol.h"
 
 void test_connet() {
     // 调用connect连接server
@@ -50,8 +52,14 @@ void test_connet() {
 void test_tcp_client() {
     rocket::IPNetAddr::s_ptr addr = std::make_shared<rocket::IPNetAddr>("127.0.0.1", 12345);
     rocket::TcpClient client(addr);
-    client.connect([addr]() {
+    client.connect([addr, &client]() {
         DEBUGLOG("connect to [%s] success", addr->toString().c_str());
+        std::shared_ptr<rocket::StringProtocol> message = std::make_shared<rocket::StringProtocol>();
+        message->info = "hello rocket";
+        message->setReqId("123456");
+        client.writeMessage(message, [](rocket::AbstractProtocol::s_ptr msg_ptr) {
+            DEBUGLOG("send message success");
+        });
     });
 }
 
