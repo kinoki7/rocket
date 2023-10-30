@@ -38,6 +38,8 @@ public:
 
     static EventLoop* GetCurrentEventLoop();
 
+    bool isLooping();
+
 private:
     void dealWakeup();
 
@@ -64,6 +66,8 @@ private:
     Mutex m_mutex;
 
     Timer* m_timer {NULL};
+
+    bool m_is_looping {false};
 
 
 };

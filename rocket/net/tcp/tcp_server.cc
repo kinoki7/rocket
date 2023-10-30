@@ -50,7 +50,7 @@ void TCPServer::onAccept() {
     // 把client_fd添加到IO线程里面
     // m_io_thread_group->getIOThread()->getEventLoop()->addEpollEvent(c);
     IOThread* io_thread = m_io_thread_group->getIOThread();
-    TcpConnection::s_ptr connection = std::make_shared<TcpConnection>(io_thread, client_fd, 128, peer_addr);
+    TcpConnection::s_ptr connection = std::make_shared<TcpConnection>(io_thread->getEventLoop(), client_fd, 128, peer_addr);
     connection->setState(Connected);
     
     m_client.insert(connection);
