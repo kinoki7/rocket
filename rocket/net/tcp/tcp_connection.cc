@@ -7,17 +7,22 @@
 
 namespace rocket {
 
-TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, NetAddr::s_ptr peer_addr)
-    : m_event_loop(event_loop), m_peer_addr(peer_addr), m_state(NotConnected), m_fd(fd) {
+TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, NetAddr::s_ptr peer_addr, TcpConnectionType type)
+    : m_event_loop(event_loop), m_peer_addr(peer_addr), m_state(NotConnected), m_fd(fd), m_connection_type(type) {
     m_in_buffer = std::make_shared<TcpBuffer>(buffer_size);
     m_out_buffer = std::make_shared<TcpBuffer>(buffer_size);
 
     m_fd_event = FdEventGroup::GetFdEventGroup()->getFdEvent(fd);
 
     m_fd_event->setNonBlock();
-    listenRead();
 
     m_coder = new StringCoder();
+
+
+    if(m_connection_type == TcpConnectionByServer) {
+        listenRead();
+    }
+
 }
 
 TcpConnection::~TcpConnection() {
@@ -81,22 +86,37 @@ void TcpConnection::onRead() {
 }
 
 void TcpConnection::excute() {
+    if(m_connection_type == TcpConnectionByServer) {
     // 将RPC请求执行业务逻辑，获取RPC响应，再把RPC响应发回去
-    std::vector<char> tmp;
-    int size = m_in_buffer->readAble();
-    tmp.resize(size);
-    m_in_buffer->readFromBuffer(tmp, size);
+        std::vector<char> tmp;
+        int size = m_in_buffer->readAble();
+        tmp.resize(size);
+        m_in_buffer->readFromBuffer(tmp, size);
 
-    std::string msg;
-    for(size_t i = 0; i < tmp.size(); i++) {
-        msg += tmp[i];
+        std::string msg;
+        for(size_t i = 0; i < tmp.size(); i++) {
+            msg += tmp[i];
+        }
+
+        INFOLOG("succ get request[%s] from client[%s]", msg.c_str(), m_peer_addr->toString().c_str());
+
+        m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
+
+        listenWrite();
+    }else {
+        //从buffer里decode得到message对象，判断是否req_id相等，相等则读成功，执行其回调
+        std::vector<AbstractProtocol::s_ptr> result;
+        m_coder->decode(result, m_in_buffer);
+
+        for(size_t i = 0; i < result.size(); ++i) {
+            std::string req_id = result[i]->getReqId();
+            auto it = m_read_dones.find(req_id);
+            if(it != m_read_dones.end()) {
+                it->second(result[i]);
+            }
+        }
     }
-
-    INFOLOG("succ get request[%s] from client[%s]", msg.c_str(), m_peer_addr->toString().c_str());
-
-    m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
-
-    listenWrite();
+    
 
 }
 
@@ -111,10 +131,10 @@ void TcpConnection::onWrite() {
         // 1. 将message encode得到字节流
         // 将数据写入到buffer里面，然后全部发送
 
-        std::vector<AbstractProtocol*> messages;
+        std::vector<AbstractProtocol::s_ptr> messages;
 
         for(size_t i = 0; i < m_write_dones.size(); ++i) {
-            messages.push_back(m_write_dones[i].first.get());
+            messages.push_back(m_write_dones[i].first);
         }
         m_coder->encode(messages, m_out_buffer);
     }
@@ -211,6 +231,11 @@ void TcpConnection::listenRead() {
 void TcpConnection::pushSendMessage(AbstractProtocol::s_ptr message, std::function<void(AbstractProtocol::s_ptr)> done) {
     m_write_dones.push_back(std::make_pair(message, done));
 }
+
+void TcpConnection::pushReadMessage(const std::string& req_id, std::function<void(AbstractProtocol::s_ptr)> done) {
+    m_read_dones.insert(std::make_pair(req_id, done));
+}
+
 
 
 }

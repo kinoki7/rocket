@@ -6,7 +6,7 @@
 
 namespace rocket {
 
-class AbstractProtocol {
+class AbstractProtocol : public std::enable_shared_from_this<AbstractProtocol>{
 
 public:
 
