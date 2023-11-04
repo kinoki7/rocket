@@ -3,7 +3,8 @@
 #include "rocket/net/tcp/tcp_connection.h"
 #include "rocket/net/fd_event_group.h"
 #include "rocket/common/log.h"
-#include "rocket/net/string_coder.h"
+#include "rocket/net/coder/string_coder.h"
+#include "rocket/net/coder/tinypb_coder.h"
 
 namespace rocket {
 
@@ -16,7 +17,7 @@ TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, Net
 
     m_fd_event->setNonBlock();
 
-    m_coder = new StringCoder();
+    m_coder = new TinyPBCoder();
 
 
     if(m_connection_type == TcpConnectionByServer) {
@@ -109,7 +110,7 @@ void TcpConnection::excute() {
         m_coder->decode(result, m_in_buffer);
 
         for(size_t i = 0; i < result.size(); ++i) {
-            std::string req_id = result[i]->getReqId();
+            std::string req_id = result[i]->m_req_id;
             auto it = m_read_dones.find(req_id);
             if(it != m_read_dones.end()) {
                 it->second(result[i]);

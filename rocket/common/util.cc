@@ -1,6 +1,8 @@
 #include "rocket/common/util.h"
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <string.h>
+#include <arpa/inet.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -31,4 +33,9 @@ int64_t getNowMs() {
     return val.tv_sec * 1000 + val.tv_usec /1000;
 }
 
+int32_t getInt32FromNetByte(const char* buf) {
+    int32_t re;
+    memcpy(&re, buf, sizeof(re));
+    return ntohl(re);
+}
 }
