@@ -89,21 +89,31 @@ void TcpConnection::onRead() {
 void TcpConnection::excute() {
     if(m_connection_type == TcpConnectionByServer) {
     // 将RPC请求执行业务逻辑，获取RPC响应，再把RPC响应发回去
-        std::vector<char> tmp;
-        int size = m_in_buffer->readAble();
-        tmp.resize(size);
-        m_in_buffer->readFromBuffer(tmp, size);
+        // std::vector<char> tmp;
+        // int size = m_in_buffer->readAble();
+        // tmp.resize(size);
+        // m_in_buffer->readFromBuffer(tmp, size);
+        std::vector<AbstractProtocol::s_ptr> result;
+        std::vector<AbstractProtocol::s_ptr> replay_rmessages;
 
-        std::string msg;
-        for(size_t i = 0; i < tmp.size(); i++) {
-            msg += tmp[i];
+        m_coder ->decode(result, m_in_buffer);
+        for(size_t i = 0; i < result.size(); ++i) {
+            // 针对每一个请求，调用rpc方法，获取响应message
+            // 将响应message放入到发送缓冲区中，监听可写事件回报
+            INFOLOG("succ get request[%s] from client[%s]", result[i]->m_req_id.c_str(), m_peer_addr->toString().c_str());
+
+            std::shared_ptr<TinyPBProtocol> message = std::make_shared<TinyPBProtocol>();
+            message->m_pb_data = "hello, this is rocket rpc test data";
+            message->m_req_id = result[i]->m_req_id;
+            replay_rmessages.emplace_back(message);
+
+            //m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
+
         }
 
-        INFOLOG("succ get request[%s] from client[%s]", msg.c_str(), m_peer_addr->toString().c_str());
-
-        m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
-
+        m_coder->decode(replay_rmessages, m_out_buffer);
         listenWrite();
+        
     }else {
         //从buffer里decode得到message对象，判断是否req_id相等，相等则读成功，执行其回调
         std::vector<AbstractProtocol::s_ptr> result;
