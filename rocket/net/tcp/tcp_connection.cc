@@ -8,8 +8,8 @@
 
 namespace rocket {
 
-TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, NetAddr::s_ptr peer_addr, TcpConnectionType type)
-    : m_event_loop(event_loop), m_peer_addr(peer_addr), m_state(NotConnected), m_fd(fd), m_connection_type(type) {
+TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size,NetAddr::s_ptr local_addr, NetAddr::s_ptr peer_addr, TcpConnectionType type)
+    : m_event_loop(event_loop), m_local_addr(local_addr), m_peer_addr(peer_addr), m_state(NotConnected), m_fd(fd), m_connection_type(type) {
     m_in_buffer = std::make_shared<TcpBuffer>(buffer_size);
     m_out_buffer = std::make_shared<TcpBuffer>(buffer_size);
 
@@ -22,6 +22,7 @@ TcpConnection::TcpConnection(EventLoop* event_loop, int fd, int buffer_size, Net
 
     if(m_connection_type == TcpConnectionByServer) {
         listenRead();
+        m_dispatcher = std::make_shared<RpcDispatcher>();
     }
 
 }
@@ -103,17 +104,19 @@ void TcpConnection::excute() {
             INFOLOG("succ get request[%s] from client[%s]", result[i]->m_req_id.c_str(), m_peer_addr->toString().c_str());
 
             std::shared_ptr<TinyPBProtocol> message = std::make_shared<TinyPBProtocol>();
-            message->m_pb_data = "hello, this is rocket rpc test data";
-            message->m_req_id = result[i]->m_req_id;
+            // message->m_pb_data = "hello, this is rocket rpc test data";
+            // message->m_req_id = result[i]->m_req_id;
+
+            m_dispatcher->dispatch(result[i], message, this);
             replay_rmessages.emplace_back(message);
 
             //m_out_buffer->writeToBuffer(msg.c_str(), msg.length());
 
         }
 
-        m_coder->decode(replay_rmessages, m_out_buffer);
+        m_coder->encode(replay_rmessages, m_out_buffer);
         listenWrite();
-        
+
     }else {
         //从buffer里decode得到message对象，判断是否req_id相等，相等则读成功，执行其回调
         std::vector<AbstractProtocol::s_ptr> result;
@@ -247,6 +250,12 @@ void TcpConnection::pushReadMessage(const std::string& req_id, std::function<voi
     m_read_dones.insert(std::make_pair(req_id, done));
 }
 
+NetAddr::s_ptr TcpConnection::getLocalAddr(){
+    return m_local_addr;
+}
 
+NetAddr::s_ptr TcpConnection::getPeerAddr() {
+    return m_peer_addr;
+}
 
 }

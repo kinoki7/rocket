@@ -11,6 +11,7 @@
 #include "rocket/net/io_thread.h"
 #include "rocket/net/coder/abstract_protocol.h"
 #include "rocket/net/coder/abstract_coder.h"
+#include "rocket/net/rpc/rpc_dispatcher.h"
 
 namespace rocket {
 
@@ -33,7 +34,7 @@ public:
 
     typedef std::shared_ptr<TcpConnection> s_ptr;
 
-    TcpConnection(EventLoop* event_loop, int fd, int buffer_size, NetAddr::s_ptr peer_addr, TcpConnectionType type = TcpConnectionByServer);
+    TcpConnection(EventLoop* event_loop, int fd, int buffer_size,NetAddr::s_ptr local_addr, NetAddr::s_ptr peer_addr, TcpConnectionType type = TcpConnectionByServer);
 
     ~TcpConnection();
 
@@ -64,6 +65,11 @@ public:
 
     void pushReadMessage(const std::string& req_id, std::function<void(AbstractProtocol::s_ptr)> done);
 
+    NetAddr::s_ptr getLocalAddr();
+
+    NetAddr::s_ptr getPeerAddr();
+
+
 
 private:
 
@@ -89,6 +95,8 @@ private:
     std::vector<std::pair<AbstractProtocol::s_ptr, std::function<void(AbstractProtocol::s_ptr)>>> m_write_dones;
 
     std::map<std::string, std::function<void(AbstractProtocol::s_ptr)>> m_read_dones;
+
+    std::shared_ptr<RpcDispatcher> m_dispatcher;
 
 
 };
