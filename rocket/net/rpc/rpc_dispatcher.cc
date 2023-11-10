@@ -12,6 +12,17 @@
 
 namespace rocket {
 
+static RpcDispatcher* g_rpc_dispathcer = NULL;
+
+RpcDispatcher* RpcDispatcher::GetRpcDispatcher() {
+    if(g_rpc_dispathcer != NULL) {
+        return g_rpc_dispathcer;
+    }
+    g_rpc_dispathcer = new RpcDispatcher;
+    return g_rpc_dispathcer;
+}
+
+
 void RpcDispatcher::dispatch(AbstractProtocol::s_ptr request, AbstractProtocol::s_ptr response, TcpConnection* connection) {
     
     std::shared_ptr<TinyPBProtocol> req_protocol = std::dynamic_pointer_cast<TinyPBProtocol>(request);
@@ -69,7 +80,7 @@ void RpcDispatcher::dispatch(AbstractProtocol::s_ptr request, AbstractProtocol::
 
     service->CallMethod(method, &rpcController, req_msg, rsp_msg, NULL);
 
-    if(rsp_msg->SerializeToString(&(rsp_protocol->m_pb_data))) {
+    if(!rsp_msg->SerializeToString(&(rsp_protocol->m_pb_data))) {
         ERRORLOG("%s | serlialize error, origin message[%s]", request->m_req_id, req_msg->ShortDebugString().c_str());
         setTinyPBError(rsp_protocol, ERROR_FAILED_SERIALIZE, "serlialize error");
         
@@ -86,7 +97,7 @@ void RpcDispatcher::dispatch(AbstractProtocol::s_ptr request, AbstractProtocol::
     }
 
     rsp_protocol->m_err_code = 0;
-    INFOLOG("%s | dispatch success, request[%s], response[%s]", req_protocol->m_req_id.c_str(), req_protocol->m_req_id.c_str(), rsp_msg->ShortDebugString().c_str())
+    INFOLOG("%s | dispatch success, request[%s], response[%s]", req_protocol->m_req_id.c_str(), req_msg->ShortDebugString().c_str(), rsp_msg->ShortDebugString().c_str())
 
     delete req_msg;
     delete rsp_msg;
