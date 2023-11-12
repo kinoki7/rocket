@@ -93,10 +93,10 @@ void TcpClient::writeMessage(AbstractProtocol::s_ptr message, std::function<void
 
 //异步读取Message
 //如果读取message成功，会调用done函数，函数的入参就是message对象
-void TcpClient::readMessage(const std::string& req_id, std::function<void(AbstractProtocol::s_ptr)> done) {
+void TcpClient::readMessage(const std::string& msg_id, std::function<void(AbstractProtocol::s_ptr)> done) {
     // 1.监听可读事件
-    // 2.从buffer里decode得到message对象，判断是否req_id相等，相等则读成功，执行其回调
-    m_connection->pushReadMessage(req_id, done);
+    // 2.从buffer里decode得到message对象，判断是否msg_id相等，相等则读成功，执行其回调
+    m_connection->pushReadMessage(msg_id, done);
     m_connection->listenRead();
 }
 
