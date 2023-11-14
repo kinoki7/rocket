@@ -73,7 +73,7 @@ void TcpConnection::onRead() {
     if(is_close) {
         // TODO: 处理关闭连接
         clear();
-        INFOLOG("peer closed, peer addr [%d], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
+        INFOLOG("peer closed, peer addr [%s], clientfd[%d]", m_peer_addr->toString().c_str(), m_fd);
         return;
     }
 

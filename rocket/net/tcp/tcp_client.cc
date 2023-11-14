@@ -63,13 +63,22 @@ void TcpClient::connect(std::function<void()> done) {
                     ERRORLOG("connnect error, errno=%d, error=%s",errno, strerror(errno));
                 }
                 //需要去掉可写事件的监听否则会一直触发
-                m_fd_event->cancle(FdEvent::OUT_EVENT);
-                m_event_loop->addEpollEvent(m_fd_event);
+                m_event_loop->deleteEpollEvent(m_fd_event);
 
                 //如果连接成功才会执行回调函数
                 if(done) {
                     done();
                 }
+
+            }, [this, done]() {
+                if(errno == ECONNREFUSED) {
+                    m_connect_error_code = ERROR_FAILED_CONNECT;
+                    m_connect_error_info = "connect refused, sys error = " + std::string(strerror(errno));
+                }else {
+                    m_connect_error_code = ERROR_FAILED_CONNECT;
+                    m_connect_error_info = "connect unknown error, sys error = " + std::string(strerror(errno));
+                }
+                ERRORLOG("connnect error, errno=%d, error=%s",errno, strerror(errno));
 
             });
 
