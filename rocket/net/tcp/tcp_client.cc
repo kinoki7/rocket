@@ -6,6 +6,8 @@
 #include "rocket/net/tcp/tcp_client.h"
 #include "rocket/net/eventloop.h"
 #include "rocket/net/fd_event_group.h"
+#include "rocket/common/err_code.h"
+#include "rocket/net/tcp/net_addr.h"
 
 namespace rocket {
 
@@ -37,7 +39,9 @@ TcpClient::~TcpClient() {
 void TcpClient::connect(std::function<void()> done) {
     int rt = ::connect(m_fd, m_peer_addr->getSockAddr(), m_peer_addr->getSockLen());
     if(rt == 0) {
+        initLocalAddr();
         DEBUGLOG("connect [%s] success", m_peer_addr->toString().c_str());
+        m_connection->setState(Connected);
         if(done) {
             done();
         }
@@ -48,13 +52,14 @@ void TcpClient::connect(std::function<void()> done) {
                 int error = 0;
                 socklen_t error_len = sizeof(error);
                 getsockopt(m_fd, SOL_SOCKET, SO_ERROR, &error, &error_len);
-                bool is_connect_succ = false;
                 if(error == 0) {
                     DEBUGLOG("connect [%s] success", m_peer_addr->toString().c_str());
-                    is_connect_succ = true;
+                    initLocalAddr();
                     m_connection->setState(Connected);
 
                 }else {
+                    m_connect_error_code = ERROR_FAILED_CONNECT;
+                    m_connect_error_info = "connect error, sys error = " + std::string(strerror(errno));
                     ERRORLOG("connnect error, errno=%d, error=%s",errno, strerror(errno));
                 }
                 //需要去掉可写事件的监听否则会一直触发
@@ -62,7 +67,7 @@ void TcpClient::connect(std::function<void()> done) {
                 m_event_loop->addEpollEvent(m_fd_event);
 
                 //如果连接成功才会执行回调函数
-                if(is_connect_succ && done) {
+                if(done) {
                     done();
                 }
 
@@ -76,6 +81,11 @@ void TcpClient::connect(std::function<void()> done) {
 
         }else {
             ERRORLOG("connnect error, errno=%d, error=%s",errno, strerror(errno));
+            m_connect_error_code = ERROR_FAILED_CONNECT;
+            m_connect_error_info = "connect error, sys error = " + std::string(strerror(errno));
+            if(done) {
+                done();
+            }
         }
     }
     
@@ -105,5 +115,36 @@ void TcpClient::stop() {
         m_event_loop->stop();
     }
 }
+
+int TcpClient::getConnectErrorCode() {
+    return m_connect_error_code;
+}
+
+std::string TcpClient::getConnectErrorInfo() {
+    return m_connect_error_info;
+}
+
+NetAddr::s_ptr TcpClient::getPeerAddr() {
+    return m_peer_addr;
+}
+
+NetAddr::s_ptr TcpClient::getLocalAddr() {
+    return m_local_addr;
+}
+
+void TcpClient::initLocalAddr() {
+    sockaddr_in local_addr;
+    socklen_t len = sizeof(local_addr);
+
+    int ret = getsockname(m_fd, reinterpret_cast<sockaddr*>(&local_addr), &len);
+    if(ret != 0) {
+        ERRORLOG("initLocalAddr earror, getsockname error, errno=%d, error=%s",errno, strerror(errno));
+        return;
+    }
+
+    m_local_addr = std::make_shared<IPNetAddr>(local_addr);
+
+}
+
 
 }
