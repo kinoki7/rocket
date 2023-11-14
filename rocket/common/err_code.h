@@ -21,6 +21,7 @@ const int ERROR_SERVICE_NOT_FOUND = SYS_ERROR_PREFIX(0008); //service不存在
 const int ERROR_METHOD_NOT_FOUND = SYS_ERROR_PREFIX(0009); //method不存在
 
 const int ERROR_PARSE_SERVICE_NAME = SYS_ERROR_PREFIX(0010); // service name解析失败
+const int ERROR_RPC_CHANNEL_INIT = SYS_ERROR_PREFIX(0011); // rpc channel 初始化失败
 
 
 
